@@ -32,7 +32,7 @@ jobs:
 
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            use-cross: true
+            use-cross: false
 
           #- os: ubuntu-latest
           #  target: armv7-unknown-linux-gnueabihf
@@ -83,11 +83,11 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install LLVM 16
-        if: contains(matrix.target, '-linux-gnu')
-        run: |
-          sudo apt-get install -y clang-16 libclang-16-dev
-          echo "LIBCLANG_PATH=/usr/lib/llvm-16/lib" >> $GITHUB_ENV
+      #- name: Install LLVM 16
+      #  if: contains(matrix.target, '-linux-gnu')
+      #  run: |
+      #    sudo apt-get install -y clang-16 libclang-16-dev
+      #    echo "LIBCLANG_PATH=/usr/lib/llvm-16/lib" >> $GITHUB_ENV
 
       # zigbuild (gnu) ≠ 需要 crt-static
       - name: Set RUSTFLAGS (musl only, NOT zig)
@@ -135,9 +135,17 @@ jobs:
           #fi
           # sudo apt update
           # sudo apt install -y tree
-          tree -L 4 target || true
+          #tree -L 4 target || true
+          if [ "${{ runner.os }}" = "Linux" ]; then
+              echo "测试多系统安装 tree"
+          fi
+          
 
       # ========== Package ==========
+      # powershell 复制文件
+      # New-Item -ItemType Directory -Force -Path "dist" 创建文件夹
+      # Copy-Item -Path "C:\source\folder" -Destination "C:\target\" -Recurse  复制整个文件夹
+      # Copy-Item -Path "target\release\your_app.exe" -Destination "dist\" -Force 强制覆盖
       - name: Package
         shell: bash
         run: |
@@ -148,14 +156,36 @@ jobs:
             BIN=target/${{ matrix.target }}/release/$NAME.exe
             ZIP=$NAME-${{ matrix.target }}.zip
             powershell Compress-Archive -Path $BIN -DestinationPath dist/$ZIP
+            powershell Copy-Item -Path $BIN -Destination "dist\" -Force
           else
             BIN=target/${{ matrix.target }}/release/$NAME
             TAR=$NAME-${{ matrix.target }}.tar.gz
             tar -czvf dist/$TAR -C $(dirname $BIN) $(basename $BIN)
+            cp $BIN dist/
           fi
 
       - name: Upload
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.target }}
+          name: ${{ github.event.repository.name }}-${{ matrix.target }}
           path: dist/*
+  deploy:
+    needs:
+      - build
+    if: always() && contains(needs.*.result, 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: download
+        uses: actions/download-artifact@v6
+        with:
+          pattern: ${{ github.event.repository.name }}-*
+          merge-multiple: true
+          path: /tmp/${{ github.event.repository.name }}
+          # 不是跨yml执行，默认就是当前run id 【${{ github.run_id }}】
+          run-id: ${{ github.run_id }}
+          #run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+      - name: ls tmp
+        run: |
+          ls -alh /tmp/${{ github.event.repository.name }}*
