@@ -157,23 +157,80 @@ jobs:
             BIN=target/${{ matrix.target }}/release/$NAME.exe
             ZIP=$NAME-${{ matrix.target }}.zip
             powershell Compress-Archive -Path $BIN -DestinationPath dist/$ZIP
-            powershell Copy-Item -Path $BIN -Destination "dist/" -Force
+            powershell Copy-Item -Path $BIN -Destination "dist/$NAME-${{ matrix.target }}.exe" -Force
           else
             BIN=target/${{ matrix.target }}/release/$NAME
             TAR=$NAME-${{ matrix.target }}.tar.gz
             tar -czvf dist/$TAR -C $(dirname $BIN) $(basename $BIN)
-            cp $BIN dist/
+            cp $BIN dist/$NAME-${{ matrix.target }}
           fi
-
+      # 记录成功失败
+      - name: Run task
+        shell: bash
+        run: |
+          #if [ "${{ matrix.version }}" = "2" ]; then
+          #  echo "success" > result.txt
+          #  exit 0
+          #else
+          #  echo "fail" > result.txt
+          #  exit 1
+          #fi
+          # 通用简便写法
+          #"success" > "dist/${{ matrix.target }}_result_success.txt"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+              powershell Set-Content -Path "dist/${{ matrix.target }}_result_success.txt" -Value "success"
+          else
+              echo "success" > dist/${{ matrix.target }}_result_success.txt
+          fi
+        continue-on-error: true
       - name: Upload
         uses: actions/upload-artifact@v6
         with:
           name: ${{ github.event.repository.name }}-${{ matrix.target }}
           path: dist/*
+  # 汇总matrix有几个成功
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: build
+    outputs:
+      any_success: ${{ steps.check.outputs.any_success }}
+    steps:
+      - name: download
+        uses: actions/download-artifact@v6
+        with:
+          pattern: ${{ github.event.repository.name }}-*
+          merge-multiple: true
+          path: /tmp
+          # 不是跨yml执行，默认就是当前run id 【${{ github.run_id }}】
+          run-id: ${{ github.run_id }}
+          #run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+      - name: Check results
+        id: check
+        run: |
+          success=false
+          #for f in $(find . -name result.txt); do
+          #  if grep -q "success" $f; then
+          #    success=true
+          #  fi
+          #done
+          # 简化版本
+          # count=$(find /tmp -type f -name "*result.txt" -exec grep -l "success" {} \; | wc -l)
+          count=$(grep -rl "success" /tmp --include="*_result_success.txt" | wc -l)
+          if [ "$count" -gt 2 ]; then
+              success=true
+          else
+              success=false
+          fi
+          echo "成功个数：$count"
+          echo "any_success=$success" >> $GITHUB_OUTPUT
   deploy:
     needs:
-      - build
-    if: always() && contains(needs.*.result, 'success')
+      - aggregate
+    #if: always() && contains(needs.*.result, 'success')
+    # "至少一个 matrix 成功，执行这里"
+    if: needs.aggregate.outputs.any_success == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: download
