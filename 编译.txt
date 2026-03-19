@@ -1,0 +1,66 @@
+RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-s" cargo zigbuild ...
+
+终极体积优化（二进制 < 5MB 轻松达成）
+upx --best --lzma target/x86_64-unknown-linux-musl/release/你的程序
+
+完整 Axum 项目 musl 静态编译流程（复制即用）
+# 1. 安装工具
+cargo install cargo-zigbuild
+# 2. 加 allocator（上面代码）
+# 3. 编译
+RUSTFLAGS="-C target-feature=+crt-static" \
+cargo zigbuild --release --target x86_64-unknown-linux-musl
+
+# 4. 验证
+file target/x86_64-unknown-linux-musl/release/axum-app
+# 输出：statically linked
+
+ls -lh target/x86_64-unknown-linux-musl/release/axum-app
+
+Docker scratch 镜像（体积通常 4-8MB）：
+FROM scratch
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/axum-app /app
+ENTRYPOINT ["/app"]
+
+
+Axum 项目用 musl 静态编译多架构（x86_64 / aarch64 / armv7 / riscv64 等）已经非常成熟。核心神器仍是 cargo-zigbuild（2025-2026 年社区共识首选），它用 Zig 作为 linker，一键支持所有 musl target，无需安装 musl-tools 或 Docker，速度快、兼容性强。备选是 cross（Docker 方式，更稳定但有开销）。
+1. 安装工具（一次搞定）
+cargo install --locked cargo-zigbuild   # 推荐（零配置）
+# 备选（Docker 方式）
+cargo install cross
+
+必须先加 target（rustup 提供 std 库）：
+rustup target add x86_64-unknown-linux-musl
+rustup target add aarch64-unknown-linux-musl
+rustup target add armv7-unknown-linux-musleabihf   # 常见 32 位 ARM
+rustup target add riscv64gc-unknown-linux-musl     # RISC-V
+
+2. 通用编译命令（带静态 + 优化）
+# 基础命令（推荐加 +crt-static 强制静态）
+RUSTFLAGS="-C target-feature=+crt-static" \
+cargo zigbuild --release --target <TARGET>
+
+# 带 allocator（mimalloc 提升多线程性能，所有架构通用）
+# 先在 Cargo.toml 加 mimalloc（如前文）
+
+
+常见多架构具体命令（2026 年推荐 target）
+# 1. x86_64（AMD/Intel，最快）
+RUSTFLAGS="-C target-feature=+crt-static -C target-cpu=native" \
+cargo zigbuild --release --target x86_64-unknown-linux-musl
+
+# 2. aarch64（ARM64，如树莓派 5、AWS Graviton、Apple M 系列服务器）
+RUSTFLAGS="-C target-feature=+crt-static -C target-cpu=cortex-a72" \  # 或 neoverse-n1
+cargo zigbuild --release --target aarch64-unknown-linux-musl
+
+# 3. armv7（32 位 ARM，如旧树莓派、嵌入式）
+RUSTFLAGS="-C target-feature=+crt-static" \
+cargo zigbuild --release --target armv7-unknown-linux-musleabihf
+
+# 4. riscv64（RISC-V，如 VisionFive、SiFive）
+RUSTFLAGS="-C target-feature=+crt-static" \
+cargo zigbuild --release --target riscv64gc-unknown-linux-musl
+
+验证静态：
+file target/<TARGET>/release/你的程序
+# 应显示 "statically linked"

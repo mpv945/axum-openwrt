@@ -1,22 +1,107 @@
-name: Rust
+name: Rust Multi-Platform Build
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-env:
-  CARGO_TERM_COLOR: always
+    #tags:
+    #  - "v*"
+  workflow_dispatch:
 
 jobs:
   build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
 
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+          # ========== Linux ==========
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use-cross: true
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            use-cross: true
+
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            use-cross: true
+
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            use-cross: true
+
+          # ========== macOS ==========
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            use-cross: false
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            use-cross: false
+
+          # ========== Windows ==========
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use-cross: false
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    #- name: Run tests
-    #  run: cargo test --verbose
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        #with:
+          # dtolnay/rust-toolchain@master 版本 支持单位： offset, which may be written in years, months, weeks, or days. 【stable minus 8 releases】
+          #toolchain: stable 18 months ago
+
+      #- run: cargo test --all-features
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      # zigbuild (gnu) ≠ 需要 crt-static
+      - name: Set RUSTFLAGS (musl only, NOT zig)
+        if: contains(matrix.target, 'musl')
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $GITHUB_ENV
+
+      - name: Install cross (Linux only)
+        if: matrix.use-cross == true
+        run: cargo install cross
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      # ========== Build ==========
+      - name: Build (cross)
+        if: matrix.use-cross == true
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (native)
+        if: matrix.use-cross == false
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # ========== Package ==========
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          NAME=your_app
+
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            BIN=target/${{ matrix.target }}/release/$NAME.exe
+            ZIP=$NAME-${{ matrix.target }}.zip
+            powershell Compress-Archive -Path $BIN -DestinationPath dist/$ZIP
+          else
+            BIN=target/${{ matrix.target }}/release/$NAME
+            TAR=$NAME-${{ matrix.target }}.tar.gz
+            tar -czvf dist/$TAR -C $(dirname $BIN) $(basename $BIN)
+          fi
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*

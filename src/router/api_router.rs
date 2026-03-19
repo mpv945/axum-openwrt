@@ -43,6 +43,12 @@ use crate::r#static::handler::static_handler;
 pub fn router(state: Arc<AppState>) ->  Router {
     let middleware = ServiceBuilder::new()
         .layer(CatchPanicLayer::custom(panic_handler));
+    // 全局
+    // .layer(axum::Extension(config.clone()))  // 全局可用
+    // 在任意 handler 提取配置
+    /*async fn health(ExtractConfig(cfg): ExtractConfig<AppConfig>) -> String {
+        format!("运行在 {}:{}", cfg.server.host, cfg.server.port)
+    }*/
     // 添加/api顶级路径
     let app = Router::new()
         //.nest("/api", api_router()) //也要返回Router<Arc<AppState>>
