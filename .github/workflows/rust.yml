@@ -62,17 +62,17 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      # zigbuild (gnu) ≠ 需要 crt-static
-      - name: Set RUSTFLAGS (musl only, NOT zig)
-        if: contains(matrix.target, 'musl')
-        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $GITHUB_ENV
-
       - name: Install cross (Linux only)
         if: matrix.use-cross == true
         run: cargo install cross
 
       - name: Add target
         run: rustup target add ${{ matrix.target }}
+
+      # zigbuild (gnu) ≠ 需要 crt-static
+      - name: Set RUSTFLAGS (musl only, NOT zig)
+        if: contains(matrix.target, 'musl')
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $GITHUB_ENV
 
       # ========== Build ==========
       - name: Build (cross)
