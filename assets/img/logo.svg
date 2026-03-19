@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+    <circle cx="60" cy="60" r="50" fill="#38bdf8"/>
+    <text x="50%" y="50%" text-anchor="middle" fill="black" dy=".3em" font-size="24">
+        Axum
+    </text>
+</svg>

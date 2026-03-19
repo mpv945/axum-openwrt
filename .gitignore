@@ -1,0 +1,8 @@
+build
+lib
+/target
+logs
+.rust
+.vscode
+.idea
+redis/dump.rdb

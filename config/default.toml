@@ -1,0 +1,27 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[database]
+# url = "postgres://postgres:123456@localhost/test"
+# url = "mysql://root:password@127.0.0.1:3306/test"
+# | 字符 | URL编码 | 可不转移特殊字符
+#| -- | ----- |
+#| @  | %40   |
+#| :  | %3A   |
+#| /  | %2F   |
+#| ?  | %3F   |
+#| #  | %23   |
+#| %  | %25   |
+url = "mysql://root:1z4w@@sh-cynosdbb.com:2517/test"
+
+# url=“redis://root:12344@127.0.0.1:6379/0” 或 url=“redis://root:@127.0.0.1:6379/0”
+[redis]
+#url = "redis://127.0.0.1" redis://:password@127.0.0.1:6379
+url = "redis://:ezzBT2.cloud.redislabs.com:1909/0"
+
+[mqtt]
+host = "127.0.0.1"
+port = 1883
+name = "de01"
+password = "asd"
