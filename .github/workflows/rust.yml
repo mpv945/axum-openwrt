@@ -27,12 +27,20 @@ jobs:
             use-cross: true
 
           - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            use-cross: true
+            target: x86_64-unknown-linux-gnu
+            use-cross: false
 
           - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
+            target: aarch64-unknown-linux-gnu
             use-cross: true
+
+          #- os: ubuntu-latest
+          #  target: armv7-unknown-linux-gnueabihf
+          #  use-cross: true
+
+          #- os: ubuntu-latest
+          #  target: riscv64gc-unknown-linux-gnu
+          #  use-cross: true
 
           # ========== macOS ==========
           - os: macos-latest
@@ -46,6 +54,9 @@ jobs:
           # ========== Windows ==========
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            use-cross: false
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
             use-cross: false
 
     steps:
@@ -85,6 +96,40 @@ jobs:
       - name: Build (native)
         if: matrix.use-cross == false
         run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Install tree (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tree
+
+      - name: Install tree (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install tree
+
+      - name: Install tree (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install tree -y
+
+      - name: Show target directory tree
+        #if: runner.os == 'Linux'
+        run: |
+          #if [ "${{ runner.os }}" = "Linux" ]; then
+          #  sudo apt-get update
+          #  sudo apt-get install -y tree
+          
+          #elif [ "${{ runner.os }}" = "macOS" ]; then
+          #  brew install tree
+          
+          #elif [ "${{ runner.os }}" = "Windows" ]; then
+          #  choco install tree -y
+          #fi
+          # sudo apt update
+          # sudo apt install -y tree
+          tree -L 4 target || true
 
       # ========== Package ==========
       - name: Package
