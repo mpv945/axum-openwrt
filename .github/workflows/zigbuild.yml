@@ -1,0 +1,111 @@
+name: Rust Release Build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+          # ========== Linux (zigbuild) ==========
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            type: zig
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            type: zig
+
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            type: zig
+
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-gnu
+            type: zig
+
+          # ========== Linux (musl fallback) ==========
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            type: musl
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            type: musl
+
+          # ========== macOS ==========
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            type: native
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            type: native
+
+          # ========== Windows ==========
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            type: native
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      # ========== Linux zig ==========
+      - name: Install Zig
+        if: matrix.type == 'zig'
+        uses: goto-bus-stop/setup-zig@v2
+
+      - name: Install cargo-zigbuild
+        if: matrix.type == 'zig'
+        run: cargo install cargo-zigbuild
+
+      # ========== Target ==========
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      # ========== Build ==========
+      - name: Build (zig)
+        if: matrix.type == 'zig'
+        run: cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Build (musl/native)
+        if: matrix.type != 'zig'
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # ========== Package ==========
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          NAME=your_app
+
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            BIN=target/${{ matrix.target }}/release/$NAME.exe
+            ZIP=$NAME-${{ matrix.target }}.zip
+            powershell Compress-Archive -Path $BIN -DestinationPath dist/$ZIP
+          else
+            BIN=target/${{ matrix.target }}/release/$NAME
+            TAR=$NAME-${{ matrix.target }}.tar.gz
+            tar -czvf dist/$TAR -C $(dirname $BIN) $(basename $BIN)
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*

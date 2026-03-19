@@ -156,7 +156,7 @@ jobs:
             BIN=target/${{ matrix.target }}/release/$NAME.exe
             ZIP=$NAME-${{ matrix.target }}.zip
             powershell Compress-Archive -Path $BIN -DestinationPath dist/$ZIP
-            powershell Copy-Item -Path $BIN -Destination "dist\" -Force
+            powershell Copy-Item -Path $BIN -Destination "dist/" -Force
           else
             BIN=target/${{ matrix.target }}/release/$NAME
             TAR=$NAME-${{ matrix.target }}.tar.gz
