@@ -64,7 +64,10 @@ jobs:
 
       - name: Install cross (Linux only)
         if: matrix.use-cross == true
-        run: cargo install cross
+        run: |
+          unset RUSTFLAGS
+          unset CARGO_BUILD_TARGET
+          cargo install cross
 
       - name: Add target
         run: rustup target add ${{ matrix.target }}

@@ -85,7 +85,8 @@ url = "2.5.8"
 rumqttc = "0.25"
 
 # HTTP Client
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+# 彻底移除 OpenSSL： 添加：default-features = false,  或者添加 openssl = { version = "0.10", features = ["vendored"] } 依赖 会增加体积
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # JWT
 jsonwebtoken = "9"
