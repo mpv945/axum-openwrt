@@ -83,6 +83,12 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
+      - name: Install LLVM 16
+        if: contains(matrix.target, '-linux-gnu')
+        run: |
+          sudo apt-get install -y clang-16 libclang-16-dev
+          echo "LIBCLANG_PATH=/usr/lib/llvm-16/lib" >> $GITHUB_ENV
+
       # zigbuild (gnu) ≠ 需要 crt-static
       - name: Set RUSTFLAGS (musl only, NOT zig)
         if: contains(matrix.target, 'musl')
@@ -136,7 +142,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          NAME=your_app
+          NAME=${{ github.event.repository.name }}
 
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             BIN=target/${{ matrix.target }}/release/$NAME.exe
