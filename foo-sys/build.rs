@@ -10,7 +10,7 @@ fn main() {
         ])*/
         .include("c_src")
         .flag("-O3")
-        .flag("-march=native")   // 性能
+        //.flag("-march=native")   // 性能, 不能指定
         .flag("-fPIC")
         .compile("foo");
 
