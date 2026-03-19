@@ -57,7 +57,7 @@ jobs:
             type: native
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          NAME=your_app
+          NAME=${{ github.event.repository.name }}
 
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             BIN=target/${{ matrix.target }}/release/$NAME.exe
@@ -107,5 +107,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
+          name: ${{ github.event.repository.name }}-${{ matrix.target }}
           path: dist/*
