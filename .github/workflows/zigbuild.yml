@@ -11,13 +11,16 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      job_version: ${{ steps.gen.outputs.step_version }}
+      job_version: ${{ steps.gen.outputs.job_version }}
 
     steps:
       - name: Generate version
         id: gen
         run: |
-          echo "step_version=$(date +\"v%Y.%m.%d_%H%M%S\")" >> $GITHUB_OUTPUT
+          # echo "job_version=$(date +\"v%Y.%m.%d_%H%M%S\")" >> $GITHUB_OUTPUT
+          echo "job_version=$(TZ=Asia/Shanghai date +\"v%Y.%m.%d_%H%M%S\")" >> $GITHUB_OUTPUT
+          # echo "step_version=$(date +\"v%Y.%m.%d_%H%M%S\")" >> $GITHUB_ENV
+          echo "step_version=$(TZ=Asia/Shanghai date +\"v%Y.%m.%d_%H%M%S\")" >> $GITHUB_ENV
       - name: Use version
         run: echo "跨step传递：Version is $step_version"
   build:
@@ -210,7 +213,7 @@ jobs:
           fi
           envsubst < github_release_template.md > /tmp/${{ github.event.repository.name }}-release-catalog.md
       - name: Release
-        if: github.ref_type == 'tag'
+        #if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ needs.prepare.outputs.job_version }}
