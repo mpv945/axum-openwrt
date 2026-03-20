@@ -8,6 +8,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      job_version: ${{ steps.gen.outputs.step_version }}
+
+    steps:
+      - name: Generate version
+        id: gen
+        run: |
+          echo "step_version=$(date +\"v%Y.%m.%d_%H%M%S\")" >> $GITHUB_OUTPUT
+      - name: Use version
+        run: echo "跨step传递：Version is $step_version"
   build:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
@@ -75,18 +87,34 @@ jobs:
         if: matrix.type == 'zig'
         run: cargo install cargo-zigbuild
 
+      - name: Install cross (Linux only)
+        if: matrix.type == 'musl'
+        run: |
+          unset RUSTFLAGS
+          unset CARGO_BUILD_TARGET
+          cargo install cross
+
       # ========== Target ==========
       - name: Add target
         run: rustup target add ${{ matrix.target }}
+
+      - name: Set RUSTFLAGS (musl only, NOT zig)
+        if: contains(matrix.target, '-linux-musl')
+        run: echo "RUSTFLAGS=-C target-feature=+crt-static" >> $GITHUB_ENV
 
       # ========== Build ==========
       - name: Build (zig)
         if: matrix.type == 'zig'
         run: cargo zigbuild --release --target ${{ matrix.target }}
 
-      - name: Build (musl/native)
-        if: matrix.type != 'zig'
+      - name: Build (native)
+        if: matrix.type == 'native'
         run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (musl)
+        if: matrix.type == 'musl'
+        run: |
+          cross build --release --target ${{ matrix.target }}
 
       # ========== Package ==========
       - name: Package
@@ -99,14 +127,95 @@ jobs:
             BIN=target/${{ matrix.target }}/release/$NAME.exe
             ZIP=$NAME-${{ matrix.target }}.zip
             powershell Compress-Archive -Path $BIN -DestinationPath dist/$ZIP
+          powershell Copy-Item -Path $BIN -Destination "dist/$NAME-${{ matrix.target }}.exe" -Force
           else
             BIN=target/${{ matrix.target }}/release/$NAME
             TAR=$NAME-${{ matrix.target }}.tar.gz
             tar -czvf dist/$TAR -C $(dirname $BIN) $(basename $BIN)
+            cp $BIN dist/$NAME-${{ matrix.target }}
           fi
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ github.event.repository.name }}-${{ matrix.target }}
           path: dist/*
+  deploy:
+    needs:
+      - prepare
+      - build
+    #if: always() && contains(needs.*.result, 'success')
+    # "至少一个 matrix 成功，执行这里"
+    runs-on: ubuntu-latest
+    steps:
+      - name: download
+        uses: actions/download-artifact@v6
+        with:
+          pattern: ${{ github.event.repository.name }}-*
+          merge-multiple: true
+          path: /tmp/${{ github.event.repository.name }}
+          # 不是跨yml执行，默认就是当前run id 【${{ github.run_id }}】
+          run-id: ${{ github.run_id }}
+          #run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+      - name: ls tmp
+        run: |
+          ls -alh /tmp/${{ github.event.repository.name }}*
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Check beta
+        #if: contains(github.event.head_commit.message, '-beta') # pull_request ❌（无效）
+        run: |
+          MESSAGE=""
+          
+          if [ "${{ github.event_name }}" = "push" ]; then
+            MESSAGE="${{ github.event.head_commit.message }}"
+          else
+            MESSAGE="${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}"
+          fi
+          
+          echo "Message: $MESSAGE"
+          
+          if [[ "$MESSAGE" == *"-beta"* ]]; then
+            echo "获取提交的消息：为-beta版本"
+          fi
+          
+          if [ "${{ github.event_name }}" = "push" ]; then
+            MESSAGE_B="${{ github.event.head_commit.message }}"
+          else
+            git fetch origin ${{ github.base_ref }} --depth=1
+            MESSAGE_B=$(git log origin/${{ github.base_ref }}..HEAD --pretty=%B)
+          fi
+          echo "另外一种获取消息：$MESSAGE_B"
+          # 设置环境变量
+          if echo "${{ github.event.head_commit.message }}" | grep -q -- "-beta"; then
+            echo "IS_BETA=true" >> $GITHUB_ENV
+          else
+            echo "IS_BETA=false" >> $GITHUB_ENV
+          fi
+      - name: Use version
+        run: echo "跨job 传递的：Version is ${{ needs.prepare.outputs.job_version }}"
+      - name: load release catalog
+        env:
+          TAG_NAME: ${{ needs.prepare.outputs.job_version }}
+        run: |
+          export START_TIME="$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S %Z %z') Asia/Shanghai"
+          if [[ "$TAG_NAME" == *"-beta" ]]; then
+            export ICON="$TAG_NAME 测试版 🏁"
+          elif [[ "$TAG_NAME" == *"-rc" ]]; then
+            export ICON="$TAG_NAME 候选版 🏳️‍🌈"
+          else
+            export ICON="$TAG_NAME 正式版 🚩"
+          fi
+          envsubst < github_release_template.md > /tmp/${{ github.event.repository.name }}-release-catalog.md
+      - name: Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ needs.prepare.outputs.job_version }}
+          tag_name: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body_path: /tmp/${{ github.event.repository.name }}-release-catalog.md
+          files: |
+            /tmp/${{ github.event.repository.name }}/*
