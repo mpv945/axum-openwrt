@@ -1,5 +1,10 @@
 name: Rust Release Build
 
+# 发布 Release 必须要支持写入
+permissions:
+  contents: write
+  discussions: write
+
 on:
   push:
     branches: [ "main" ]
